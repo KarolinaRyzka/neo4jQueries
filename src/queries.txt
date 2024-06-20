@@ -1,0 +1,86 @@
+//degree centrality
+SELECT n.id, COUNT(r.start_node) AS numberOfConnections
+FROM nodes n
+LEFT JOIN relationships r ON n.id = r.start_node
+GROUP BY n.id
+ORDER BY numberOfConnections DESC
+LIMIT 1;
+
+//top 5 nodes degree centrality
+SELECT n.id, COUNT(r.start_node) AS mostCited
+FROM nodes n
+LEFT JOIN relationships r ON n.id = r.start_node
+GROUP BY n.id
+ORDER BY mostCited DESC, n.id
+LIMIT 5;
+
+//degree distribution
+SELECT COUNT(r.start_node) AS degree, COUNT(*) AS frequency
+FROM nodes n
+LEFT JOIN relationships r ON n.id = r.start_node
+GROUP BY n.id
+ORDER BY degree ASC;
+
+//Nodes with a specific degree (ex: 10)
+SELECT n.id AS numberOfNodesWithDegree10
+FROM nodes n
+LEFT JOIN relationships r ON n.id = r.start_node
+GROUP BY n.id
+HAVING COUNT(r.start_node) = 10
+LIMIT 10;
+
+//Graph density
+WITH node_count AS (
+    SELECT COUNT(*) AS numNodes
+    FROM nodes
+),
+relationship_count AS (
+    SELECT COUNT(*) AS numRelationships
+    FROM relationships
+)
+SELECT 2.0 * rc.numRelationships / (nc.numNodes * (nc.numNodes - 1)) AS density
+FROM node_count nc, relationship_count rc;
+
+//isolated nodesSELECT n.id AS isolatedNodes
+FROM nodes n
+LEFT JOIN relationships r ON n.id = r.start_node OR n.id = r.end_node
+WHERE r.start_node IS NULL AND r.end_node IS NULL;
+
+//most connected node
+SELECT n.id, COUNT(r.start_node) AS numberOfConnections
+FROM nodes n
+LEFT JOIN relationships r ON n.id = r.start_node
+GROUP BY n.id
+ORDER BY numberOfConnections DESC
+LIMIT 1;
+
+//most frequent degree counts
+SELECT COUNT(r.start_node) AS degree, COUNT(*) AS frequency
+FROM nodes n
+LEFT JOIN relationships r ON n.id = r.start_node
+GROUP BY n.id
+ORDER BY frequency DESC
+LIMIT 1;
+
+//number of nodes
+SELECT COUNT(*) AS numberOfNodes
+FROM nodes;
+
+//number of relationships
+SELECT COUNT(*) AS numberOfRelationships
+FROM relationships;
+
+//singleton nodes
+SELECT n.id AS singletonNodes
+FROM nodes n
+LEFT JOIN relationships r ON n.id = r.start_node OR n.id = r.end_node
+GROUP BY n.id
+HAVING COUNT(r.start_node) = 1;
+
+//top 10 degrees
+SELECT n.id, COUNT(r.start_node) AS degree
+FROM nodes n
+LEFT JOIN relationships r ON n.id = r.start_node
+GROUP BY n.id
+ORDER BY degree DESC
+LIMIT 10;
