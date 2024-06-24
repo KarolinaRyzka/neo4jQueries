@@ -41,10 +41,12 @@ relationship_count AS (
 SELECT 2.0 * rc.numRelationships / (nc.numNodes * (nc.numNodes - 1)) AS density
 FROM node_count nc, relationship_count rc;
 
-//isolated nodesSELECT n.id AS isolatedNodes
+//isolated nodes
+SELECT n.id AS isolatedNodes
 FROM nodes n
 LEFT JOIN relationships r ON n.id = r.start_node OR n.id = r.end_node
 WHERE r.start_node IS NULL AND r.end_node IS NULL;
+
 
 //most connected node
 SELECT n.id, COUNT(r.start_node) AS numberOfConnections

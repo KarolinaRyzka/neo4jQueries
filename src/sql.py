@@ -2,19 +2,23 @@ import pandas as pd
 import sqlite3
 from typing import Optional
 from tqdm import tqdm
+import seaborn as sns
+import matplotlib.pyplot as plt
 from sqlite3 import Connection, Cursor
-from pandas import DataFrame
+from pandas import DataFrame, Series
+from typing import Iterator, Union
 
 
-
-def loadTableIntoDataframe(conn: Connection, tableName: str, columns: Optional[list] = None) -> pd.DataFrame:
+def loadTableIntoDataframe(conn: Connection, tableName: str, columns: Optional[list] = None, returnIterator: bool = False) -> pd.DataFrame:
     
     columns_str = "*" if columns is None else ", ".join(columns)
     query = f"SELECT {columns_str} FROM {tableName}"
     
     # Execute the query and read the result into a pandas DataFrame
-    df = pd.read_sql_query(query, conn)
-    
+    if returnIterator:
+        df = pd.read_sql_query(query, conn, chunksize=50000)
+    else:
+        df = pd.read_sql_query(query, conn)
     return df
 
 def countNodes(conn: Connection) -> int:
@@ -26,6 +30,24 @@ def countRelationships(conn: Connection) -> int:
     query = f"SELECT COUNT(*) AS numberOfRelationships FROM relationship_cites"
     result: Cursor = conn.execute(query)
     return result.fetchone()[0]
+
+def plotNodesVsRelationships(conn: Connection) -> None:
+    nodeCount = countNodes(conn)
+    relationshipCount = countRelationships(conn)
+    data = {
+    '': ['Nodes', 'Relationships'],
+    'Count': [nodeCount, relationshipCount]
+}
+    # Convert data to a pandas DataFrame
+    df = pd.DataFrame(data)
+    # Plotting using seaborn
+    plt.figure(figsize=(8, 6))
+    sns.barplot(data=df, x='', y='Count')
+    plt.ylabel('Count')
+    plt.title('Node Count vs Relationship Count')
+    plt.tight_layout()
+    plt.savefig("/Users/karolinaryzka/Documents/neo4jQueries/src/nodesVsRelationships.png")
+
 
 def graphDensity(conn: Connection) -> float:
     nodeCount = countNodes(conn)
@@ -44,90 +66,117 @@ def graphDensity(conn: Connection) -> float:
     result: Cursor = conn.execute(query)
     return result.fetchone()[0]
 
-def degreeCentrality(conn: Connection, nodesDf: pd.DataFrame, relationshipsDf: pd.DataFrame) -> pd.DataFrame:
-    nodesDf['oaid'] = nodesDf['oaid'].astype('str')
-    relationshipsDf['id'] = relationshipsDf['id'].astype('str')
 
-    total_Steps = len(nodesDf) + len(relationshipsDf)
-    with  tqdm(total=total_Steps, desc="Processing DataFrames") as pbar:
-        mergedDf = nodesDf.merge(relationshipsDf, how='left', left_on='oaid', right_on='work_oaid')
-        pbar.update(len(nodesDf))
-        degreeCentralityDf = mergedDf.groupby('oaid').size().reset_index(name='numberOfConnections')
-        pbar.update(len(relationshipsDf))
-        degreeCentralityDf = degreeCentralityDf.sort_values(by='numberOfConnections', ascending=False)
-
-    highestDegreeNode = degreeCentralityDf.head(1)
-    result = highestDegreeNode
+def inDegreeCentrality(conn: Connection) -> pd.DataFrame:
+    query = f"SELECT ref_oaid, Count(*) as c FROM relationship_cites GROUP BY ref_oaid HAVING Count(*) > 15 ORDER BY c DESC LIMIT 15;"
+    result = pd.read_sql_query(query, conn)
+    plt.figure(figsize=(12, 6))
+    sns.barplot(data=result, x = 'ref_oaid', y = 'c')
+    plt.xlabel('OPEN ALEX ID')
+    plt.ylabel('In-Degree Centrality')
+    plt.title('Top 15 Most Cited Papers')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig("/Users/karolinaryzka/Documents/neo4jQueries/src/inDegree.png")
     return result
 
-def isolatedNodes(conn: Connection, nodesDf: pd.DataFrame, relationshipsDf: pd.DataFrame) -> pd.DataFrame:
-    nodesDf['oaid'] = nodesDf['oaid'].astype(str)
-    relationshipsDf['work_oaid'] = relationshipsDf['work_oaid'].astype(str)
 
-    with tqdm(total=len(nodesDf), desc="Finding Isolated Nodes") as pbar:
-        mergedDf = nodesDf.merge(relationshipsDf, how='left', left_on='oaid', right_on='work_oaid')
-        pbar.update(len(nodesDf))
+def outDegreeCentrality(conn: Connection) -> pd.DataFrame:
+    query = f"SELECT work_oaid, Count(*) as c FROM relationship_cites GROUP BY work_oaid HAVING Count(*) > 15 ORDER BY c DESC LIMIT 15;"
+    result = pd.read_sql_query(query, conn)
+    plt.figure(figsize=(12, 6))
+    sns.barplot(data=result, x='work_oaid', y='c')
+    plt.xlabel('OPEN ALEX ID')
+    plt.ylabel('Out-Degree Centrality')
+    plt.title('Top 15 Papers that Reference Others')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig("/Users/karolinaryzka/Documents/neo4jQueries/src/outDegree.png")
+    return result
 
-        isolatedNodesDf = mergedDf[(mergedDf['work_oaid'].isna()) & (mergedDf['id'].isna())]
-        pbar.update(len(relationshipsDf))
 
-    return isolatedNodesDf[['oaid']]
+def isolatedNodes(conn: Connection) -> pd.DataFrame:
+    query = f"SELECT ref_oaid, Count(*) as c FROM relationship_cites GROUP BY ref_oaid HAVING Count(*) = 1;"
+    result = pd.read_sql_query(query, conn)
+    return result
 
-def singletonNodes(conn: Connection, nodesDf: pd.DataFrame, relationshipsDf: pd.DataFrame) -> pd.DataFrame:
-    nodesDf['oaid'] = nodesDf['oaid'].astype(str)
-    relationshipsDf['work_oaid'] = relationshipsDf['work_oaid'].astype(str)
 
-    with tqdm(total=len(nodesDf), desc="Finding Singleton Nodes") as pbar:
-        mergedDf = nodesDf.merge(relationshipsDf, how='left', left_on='oaid', right_on='work_oaid')
-        pbar.update(len(nodesDf))
+def singletonNodes(conn: Connection) -> pd.DataFrame:
+    query = f"SELECT ref_oaid, Count(*) as c FROM relationship_cites GROUP BY ref_oaid HAVING Count(*) IS NULL;"
+    result = pd.read_sql_query(query, conn)
+    return result
 
-        singletonNodesDf = mergedDf.groupby('oaid').size().reset_index(name='count')
-        singletonNodesDf = singletonNodesDf[singletonNodesDf['count'] == 1]
 
-    return singletonNodesDf[['oaid']]
+def mostFrequentDegreeCounts(conn: Connection) -> pd.DataFrame:
+    query = f"""
+    SELECT degree_count, COUNT(*) AS frequency
+    FROM (
+        SELECT work_oaid, COUNT(*) AS degree_count
+        FROM relationship_cites
+        GROUP BY work_oaid
+    ) AS degree_counts
+    GROUP BY degree_count
+    ORDER BY frequency DESC LIMIT 15;
+    """
+    result = pd.read_sql_query(query, conn)
+    plt.figure(figsize=(12, 6))
+    sns.barplot(data=result, x='degree_count', y='frequency')
+    plt.xlabel('Degree')
+    plt.ylabel('Frequency')
+    plt.title('Top 15 Most Frequent Number of Citations')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig("/Users/karolinaryzka/Documents/neo4jQueries/src/mostFrequentDegrees.png")
+    return result
 
-def mostFrequentDegreeCounts(conn: Connection, nodesDf: pd.DataFrame, relationshipsDf: pd.DataFrame) -> pd.DataFrame:
-    nodesDf['oaid'] = nodesDf['oaid'].astype(str)
-    relationshipsDf['work_oaid'] = relationshipsDf['work_oaid'].astype(str)
 
-    with tqdm(desc="Finding Most Frequent Degree Counts") as pbar:
-        mergedDf = nodesDf.merge(relationshipsDf, how='left', left_on='oaid', right_on='work_oaid')
-        pbar.update(len(nodesDf))
+def nodesOfDegreeX(conn: Connection, degreeCount: int) -> pd.DataFrame:
+    query = f"SELECT ref_oaid FROM relationship_cites GROUP BY ref_oaid HAVING COUNT(*) = {degreeCount};"
+    result = pd.read_sql_query(query, conn)
+    return result
 
-        degree_counts_df = mergedDf.groupby('oaid').agg(degree=('work_oaid', 'count')).reset_index()
-        frequency_df = degree_counts_df.groupby('degree').size().reset_index(name='frequency')
-        frequency_df = frequency_df.sort_values(by='frequency', ascending=False).head(10)
+def mostConnectedNodes(conn: Connection) -> pd.DataFrame:
+    query = f"""
+    SELECT node_id, SUM(degree_count) AS total_degree
+    FROM (
+        SELECT ref_oaid AS node_id, COUNT(*) AS degree_count
+        FROM relationship_cites
+        GROUP BY ref_oaid
+        UNION ALL
+        SELECT work_oaid AS node_id, COUNT(*) AS degree_count
+        FROM relationship_cites
+        GROUP BY work_oaid
+    ) AS combined_degrees
+    GROUP BY node_id
+    HAVING SUM(degree_count) > 15
+    ORDER BY total_degree DESC LIMIT 15;
+    """
+    result = pd.read_sql_query(query, conn)
+    plt.figure(figsize=(12, 6))
+    sns.barplot(data=result, x='node_id', y='total_degree')
+    plt.xlabel('OPEN ALEX ID')
+    plt.ylabel('Total Degrees (in both directions)')
+    plt.title('Top 15 Most Connected Papers')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig("/Users/karolinaryzka/Documents/neo4jQueries/src/mostConnectedNodes.png")
+    return result
 
-    return frequency_df
-
-def nodesOfDegreeX(conn: Connection, degree: int, nodesDf: pd.DataFrame, relationshipsDf: pd.DataFrame) -> pd.DataFrame:
-    nodesDf['oaid'] = nodesDf['oaid'].astype(str)
-    relationshipsDf['start_node'] = relationshipsDf['work_oaid'].astype(str)
-
-    with tqdm(desc=f"Finding Nodes with Degree {degree}") as pbar:
-        mergedDf = nodesDf.merge(relationshipsDf, how='left', left_on='oaid', right_on='work_oaid')
-        pbar.update(len(nodesDf))
-
-        degreeCountsDf = mergedDf.groupby('oaid').agg(degree_count=('work_oaid', 'count')).reset_index()
-        specific_degree_nodes_df = degreeCountsDf[degreeCountsDf['degree_count'] == degree].head(10)
-
-    return specific_degree_nodes_df[['oaid']]
 
 def main(  
 ) -> None:
-    #db: Connection = connectToDB(dbPath)
     conn = sqlite3.connect("/Users/karolinaryzka/Documents/neo4jQueries/works_cites.db")
     print(f"Number of nodes: {countNodes(conn)}")
     print(f"Number of relationships: {countRelationships(conn)}")
+    plotNodesVsRelationships(conn)
     print(f"Graph density: {graphDensity(conn)}")
-
-    nodesDf = loadTableIntoDataframe(conn, 'works', columns=['oaid'])
-    relationshipsDf = loadTableIntoDataframe(conn, 'relationship_cites', columns=['id', 'work_oaid'])
-    #print(f"Highest Degree Node: {degreeCentrality(conn, nodesDf, relationshipsDf)}")
-    #print(f"Isolated Nodes: {isolatedNodes(conn, nodesDf, relationshipsDf)}"
-    #print(f"Singleton Nodes: {singletonNodes(conn, nodesDf,relationshipsDf)}")
-    #print(f"Most Frequent Degree Counts: {mostFrequentDegreeCounts(conn, nodesDf, relationshipsDf)}")
-    print(f"Nodes with Degree of 10: {nodesOfDegreeX(conn, 10, nodesDf, relationshipsDf)}")
+    print(f"Most Cited Papers: {inDegreeCentrality(conn)}")
+    print(f"Papers with the Most References: {outDegreeCentrality(conn)}")
+    print(f"Isolated Nodes: {isolatedNodes(conn)}")
+    print(f"Singleton Nodes: {singletonNodes(conn)}")
+    print(f"Most Frequent Degree Counts: {mostFrequentDegreeCounts(conn)}")
+    print(f"Nodes with Degree of 10: {nodesOfDegreeX(conn, 10)}")
+    print(f"Most Connected Nodes (in both directions): {mostConnectedNodes(conn)}")
     conn.close()
     
 
