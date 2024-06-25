@@ -3,7 +3,7 @@ from sqlite3 import Connection, Cursor
 from typing import Iterator, Optional, Union
 
 import matplotlib.pyplot as plt
-import pandas as pd
+import pandas
 import seaborn as sns
 from pandas import DataFrame, Series
 from tqdm import tqdm
@@ -14,15 +14,15 @@ def loadTableIntoDataframe(
     tableName: str,
     columns: Optional[list] = None,
     returnIterator: bool = False,
-) -> pd.DataFrame:
+) -> DataFrame:
     columns_str = "*" if columns is None else ", ".join(columns)
     query = f"SELECT {columns_str} FROM {tableName}"
 
     # Execute the query and read the result into a pandas DataFrame
     if returnIterator:
-        df = pd.read_sql_query(query, conn, chunksize=50000)
+        df = pandas.read_sql_query(query, conn, chunksize=50000)
     else:
-        df = pd.read_sql_query(query, conn)
+        df = pandas.read_sql_query(query, conn)
     return df
 
 
@@ -43,7 +43,7 @@ def plotNodesVsRelationships(conn: Connection) -> None:
     relationshipCount = countRelationships(conn)
     data = {"": ["Nodes", "Relationships"], "Count": [nodeCount, relationshipCount]}
     # Convert data to a pandas DataFrame
-    df = pd.DataFrame(data)
+    df = DataFrame(data)
     # Plotting using seaborn
     plt.figure(figsize=(8, 6))
     sns.barplot(data=df, x="", y="Count")
@@ -73,9 +73,9 @@ def graphDensity(conn: Connection) -> float:
     return result.fetchone()[0]
 
 
-def inDegreeCentrality(conn: Connection) -> pd.DataFrame:
+def inDegreeCentrality(conn: Connection) -> DataFrame:
     query = f"SELECT ref_oaid, Count(*) as c FROM relationship_cites GROUP BY ref_oaid HAVING Count(*) > 15 ORDER BY c DESC LIMIT 15;"
-    result = pd.read_sql_query(query, conn)
+    result = pandas.read_sql_query(query, conn)
     plt.figure(figsize=(12, 6))
     sns.barplot(data=result, x="ref_oaid", y="c")
     plt.xlabel("OPEN ALEX ID")
@@ -87,9 +87,9 @@ def inDegreeCentrality(conn: Connection) -> pd.DataFrame:
     return result
 
 
-def outDegreeCentrality(conn: Connection) -> pd.DataFrame:
+def outDegreeCentrality(conn: Connection) -> DataFrame:
     query = f"SELECT work_oaid, Count(*) as c FROM relationship_cites GROUP BY work_oaid HAVING Count(*) > 15 ORDER BY c DESC LIMIT 15;"
-    result = pd.read_sql_query(query, conn)
+    result = pandas.read_sql_query(query, conn)
     plt.figure(figsize=(12, 6))
     sns.barplot(data=result, x="work_oaid", y="c")
     plt.xlabel("OPEN ALEX ID")
@@ -101,19 +101,19 @@ def outDegreeCentrality(conn: Connection) -> pd.DataFrame:
     return result
 
 
-def isolatedNodes(conn: Connection) -> pd.DataFrame:
+def isolatedNodes(conn: Connection) -> DataFrame:
     query = f"SELECT ref_oaid, Count(*) as c FROM relationship_cites GROUP BY ref_oaid HAVING Count(*) = 1;"
-    result = pd.read_sql_query(query, conn)
+    result = pandas.read_sql_query(query, conn)
     return result
 
 
-def singletonNodes(conn: Connection) -> pd.DataFrame:
+def singletonNodes(conn: Connection) -> DataFrame:
     query = f"SELECT ref_oaid, Count(*) as c FROM relationship_cites GROUP BY ref_oaid HAVING Count(*) IS NULL;"
-    result = pd.read_sql_query(query, conn)
+    result = pandas.read_sql_query(query, conn)
     return result
 
 
-def mostFrequentDegreeCounts(conn: Connection) -> pd.DataFrame:
+def mostFrequentDegreeCounts(conn: Connection) -> DataFrame:
     query = f"""
     SELECT degree_count, COUNT(*) AS frequency
     FROM (
@@ -124,7 +124,7 @@ def mostFrequentDegreeCounts(conn: Connection) -> pd.DataFrame:
     GROUP BY degree_count
     ORDER BY frequency DESC LIMIT 15;
     """
-    result = pd.read_sql_query(query, conn)
+    result = pandas.read_sql_query(query, conn)
     plt.figure(figsize=(12, 6))
     sns.barplot(data=result, x="degree_count", y="frequency")
     plt.xlabel("Degree")
@@ -138,13 +138,13 @@ def mostFrequentDegreeCounts(conn: Connection) -> pd.DataFrame:
     return result
 
 
-def nodesOfDegreeX(conn: Connection, degreeCount: int) -> pd.DataFrame:
+def nodesOfDegreeX(conn: Connection, degreeCount: int) -> DataFrame:
     query = f"SELECT ref_oaid FROM relationship_cites GROUP BY ref_oaid HAVING COUNT(*) = {degreeCount};"
-    result = pd.read_sql_query(query, conn)
+    result = pandas.read_sql_query(query, conn)
     return result
 
 
-def mostConnectedNodes(conn: Connection) -> pd.DataFrame:
+def mostConnectedNodes(conn: Connection) -> DataFrame:
     query = f"""
     SELECT node_id, SUM(degree_count) AS total_degree
     FROM (
@@ -160,7 +160,7 @@ def mostConnectedNodes(conn: Connection) -> pd.DataFrame:
     HAVING SUM(degree_count) > 15
     ORDER BY total_degree DESC LIMIT 15;
     """
-    result = pd.read_sql_query(query, conn)
+    result = pandas.read_sql_query(query, conn)
     plt.figure(figsize=(12, 6))
     sns.barplot(data=result, x="node_id", y="total_degree")
     plt.xlabel("OPEN ALEX ID")
