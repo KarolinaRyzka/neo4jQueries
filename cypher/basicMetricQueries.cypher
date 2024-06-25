@@ -34,9 +34,9 @@ RETURN 2.0 * numRelationships / (numNodes * (numNodes - 1)) AS desnity
 
 //Graph Instance
 CALL gds.graph.project(
-  'graph', 
-  '*',     
-  'RELATED' 
+  'graph',
+  '*',
+  'RELATED'
 )
 
 
@@ -48,7 +48,7 @@ RETURN n AS isolatedNodes
 // Memory Estimation
 CALL gds[.<tier>].<algorithm>.<execution-mode>.estimate(
   graphNameOrConfig: String or Map,
-  configuration: Map //same as target alg 
+  configuration: Map //same as target alg
 ) YIELD
   nodeCount: Integer,
   relationshipCount: Integer,
@@ -70,7 +70,7 @@ LIMIT 1
 //Most Frequency Degree Counts
 MATCH (n)
 WITH size([(n)--() | 1]) AS degree
-RETURN degree, COUNT(*) AS frequency 
+RETURN degree, COUNT(*) AS frequency
 ORDER BY frequency DESC
 LIMIT 1
 
